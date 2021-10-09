@@ -1,0 +1,1469 @@
+---
+title: "ASSIGNMENT 1"
+author: "MIRABELLA SIMONE"
+date: "25/09/2021"
+output: word_document
+---
+
+#PROBLEM 1
+
+First of all, I need to create my dataset. I obtain the two predictors x1 and x2 from a uniform distribution with values between 0 and 1. With them, I now obtain the correspondent values on the y, which is the response. The realtion between y and the predictors is set to be the Franke function, obtained as follows.
+A stochastic noise with a normal distribution in also implemented to obtain y in order to have more realistic data.
+
+```{r dataset creation}
+set.seed(29012001)
+
+x1 <- cbind(runif(100, 0, 1))
+x2 <- cbind(runif(100, 0, 1))
+X <- as.data.frame(cbind(x1,x2))
+
+term1 <- 0.75 * exp(-(9*x1-2)^2/4 - (9*x2-2)^2/4)
+term2 <- 0.75 * exp(-(9*x1+1)^2/49 - (9*x2+1)/10)
+term3 <- 0.5 * exp(-(9*x1-7)^2/4 - (9*x2-3)^2/4)
+term4 <- -0.2 * exp(-(9*x1-4)^2 - (9*x2-7)^2)
+  
+y <- cbind(term1 + term2 + term3 + term4 + 0.001*rnorm(100))
+
+dataset <- cbind(X,y)
+head(dataset)
+
+```
+
+Since x1 and x2 come from the same distribution and have the same order of magnitude, they are already scaled by their nature, so there is no point in computing a scaling for them. The same applies for y, which directly comes from x1 and x2. Anyway, if they were not scaled, I would have needed to standardize them. This is true because, mostly when using polynomial regression with interaction terms, the model presents multicollinearity, that would lead to incorrect estimates of the coefficients and general misleading results. It could be possible to compare two models, one obtained from unstandardized variables and the other with standardized ones, comparing values as the VIF (variance inflaction factor), which measures how much the behavior (variance) of predictor is influenced, or inflated, by its correlation with the other predictors.
+
+We can plot the data contained in the dataset to see how they are disposed in the 3d plane. 
+
+```{r 3d plot, message=FALSE, warning=FALSE}
+require(scatterplot3d);
+graph<-scatterplot3d(x1, x2, y, xlab="x1", ylab="x2", 
+                       zlab="y", type="h", highlight.3d=FALSE, 
+                       col.axis="black",col.grid="gray",
+                       angle=60, pch=16)
+graph$points3d(mean(x1), mean(x2), mean(y), 
+                 col="red", type="h", pch=16)
+
+```
+
+I create here a matrix to collect the values of the MSE and R2 that I will calculate for each order of the polynomials
+
+```{r results matrix}
+results <- matrix(data=NA, nrow=2,ncol=5)
+rownames(results)<-cbind("MSE","R2") 
+names<-c()
+for (i in 1:5){
+  names[i] <- paste("order", as.character(i))
+}
+colnames(results) <- names
+```
+
+perform a standard least square regression analysis using polynomials in x1 and x2 up to fifth order
+
+
+```{r matrix function creation}
+model_matrix <- function(x,y,n){
+  l <- length(x)
+  if (n==1){
+    X <- cbind(rep(1,l),x,y)
+  }
+  else if (n==2){
+    X <- cbind(rep(1,l),x,y,x**2,y**2,x*y)
+  }
+  else if (n==3){
+    X <- cbind(rep(1,l),x , y , x**2 , y**2 , x*y , x**3 , y**3, (x**2)*y, x*(y**2))
+  }
+  else if (n==4){
+    X <- cbind(rep(1,l),x , y , x**2 , y**2 , x*y , x**3 , y**3, (x**2)*y, x*(y**2), (x**2)*(y**2),x**4, y**4,(x**3)*y,x*(y**3))
+  }
+  else if (n==5){
+    X <- cbind(rep(1,l),x , y , x**2 , y**2 , x*y , x**3 , y**3, (x**2)*y, x*(y**2), (x**2)*(y**2),x**4, y**4,(x**3)*y,x*(y**3),x**5, y**5,(x**3)*(y**2),(x**2)*(y**3))
+  }
+return(X)
+}
+```
+
+```{r beta function creation}
+betas <- function(matX,vec_y){
+  beta <- solve(t(matX) %*% matX) %*% t(matX) %*% vec_y
+  return(beta)
+}
+```
+
+```{r prediction function creation}
+predictions <- function(x,y,n,beta){
+  if (n==1){
+    prediction <- beta[1] + beta[2]*x + beta[3]*y 
+  }
+  else if (n==2){
+    prediction <- beta[1] + beta[2]* x + beta[3]* y + beta[4]* x**2 + beta[5]* y**2 + beta[6]* x*y 
+  }
+  else if (n==3){
+    prediction <- beta[1] + beta[2]* x + beta[3]* y + beta[4]* x**2 + beta[5]* y**2 + beta[6]* x*y + beta[7]* x**3 + beta[8]* y**3 + beta[9]* (x**2)*y + beta[10]* x*(y**2)
+  }
+  else if (n==4){
+    prediction <- beta[1] + beta[2]* x + beta[3]* y + beta[4]* x**2 + beta[5]* y**2 + beta[6]* x*y + beta[7]* x**3 + beta[8]* y**3 + beta[9]* (x**2)*y + beta[10]* x*(y**2) + beta[11]* (x**2)*(y**2) + beta[12]* x**4 + beta[13]* y**4 + beta[14]* (x**3)*y+ beta[15]* x*(y**3)
+  }
+  else if (n==5){
+    prediction <- beta[1] + beta[2]* x + beta[3]* y + beta[4]* x**2 + beta[5]* y**2 + beta[6]* x*y + beta[7]* x**3 + beta[8]* y**3 + beta[9]* (x**2)*y + beta[10]* x*(y**2) + beta[11]* (x**2)*(y**2) + beta[12]* x**4 + beta[13]* y**4 + beta[14]* (x**3)*y+ beta[15]* x*(y**3) + beta[16]* x**5 + beta[17]* y**5 + beta[18]* (x**3)*(y**2) + beta[19]* (x**2)*(y**3)
+  }
+  
+  return(prediction)
+  
+}
+```
+
+Splitting the data into test and trainig. Here I split the data using 80% of the observation to make the training set, and the remaining 20% for the test set:
+
+```{r split function creation}
+train_test <- function(X,y){
+  set.seed(29012001)
+  trRowIndex <- sample(1:nrow(X), 0.8*nrow(X))
+  
+  trdataX <- X[trRowIndex, ]
+  trdataY <- y[trRowIndex, ]
+  
+  tedataX <- X[-trRowIndex, ]
+  tedataY <- y[-trRowIndex, ]
+  
+  Train_Test <- list(trdataX, trdataY, tedataX, tedataY)
+  
+  return(Train_Test)
+}
+
+```
+
+```{r}
+translate <- function(vector){
+  v <- c()
+  for (i in 1:length(vector)){
+    v[i] <- toString(vector[i])
+  }
+  return(v)
+}
+```
+
+
+Let's start:
+
+```{r implementation}
+splitted <- train_test(X,y)
+
+trainingX <- splitted[[1]]
+trainingY <- splitted[[2]]
+testX <- splitted[[3]]
+testY <- splitted[[4]]
+
+matrix_deg1 <- model_matrix(trainingX[,1],trainingX[,2],1)
+rownames(matrix_deg1) <- translate(rownames(trainingX))
+testX_1 <- as.data.frame(model_matrix(testX$V1,testX$V2,1))
+beta_deg1 <- betas(matrix_deg1, trainingY)
+pred_deg1 <- predictions(testX[,1],testX[,2],1,beta_deg1)
+mse_deg1 <- mean((testY - pred_deg1)^2)
+r2_deg1 <- 1 - sum((testY - pred_deg1)^2)/sum((testY - mean(testY))^2)
+
+
+matrix_deg2 <- model_matrix(trainingX[,1],trainingX[,2],2)
+rownames(matrix_deg2) <- translate(rownames(trainingX))
+testX_2 <- as.data.frame(model_matrix(testX$V1,testX$V2,2))
+beta_deg2 <- betas(matrix_deg2, trainingY)
+pred_deg2 <- predictions(testX[,1],testX[,2],2,beta_deg2)
+mse_deg2 <- mean((testY - pred_deg2)^2)
+r2_deg2 <- 1 - sum((testY - pred_deg2)^2)/sum((testY - mean(testY))^2)
+
+
+matrix_deg3 <- model_matrix(trainingX[,1],trainingX[,2],3)
+rownames(matrix_deg3) <- translate(rownames(trainingX))
+testX_3 <- as.data.frame(model_matrix(testX$V1,testX$V2,3))
+beta_deg3 <- betas(matrix_deg3, trainingY)
+pred_deg3 <- predictions(testX[,1],testX[,2],3,beta_deg3)
+mse_deg3 <- mean((testY - pred_deg3)^2)
+r2_deg3 <- 1 - sum((testY - pred_deg3)^2)/sum((testY - mean(testY)^2))
+
+
+matrix_deg4 <- model_matrix(trainingX[,1],trainingX[,2],4)
+rownames(matrix_deg4) <- translate(rownames(trainingX))
+testX_4 <- as.data.frame(model_matrix(testX$V1,testX$V2,4))
+beta_deg4 <- betas(matrix_deg4, trainingY)
+pred_deg4 <- predictions(testX[,1],testX[,2],4,beta_deg4)
+mse_deg4 <- mean((testY - pred_deg4)^2)
+r2_deg4 <- 1 - sum((testY - pred_deg4)^2)/sum((testY - mean(testY))^2)
+
+
+matrix_deg5 <- model_matrix(trainingX[,1],trainingX[,2],5)
+rownames(matrix_deg5) <- translate(rownames(trainingX))
+testX_5 <- as.data.frame(model_matrix(testX$V1,testX$V2,5))
+beta_deg5 <- betas(matrix_deg5, trainingY)
+pred_deg5 <- predictions(testX[,1],testX[,2],5,beta_deg5)
+mse_deg5 <- mean((testY - pred_deg5)^2)
+r2_deg5 <- 1 - sum((testY - pred_deg5)^2)/sum((testY - mean(testY))^2)
+
+results[1,] <- rbind(mse_deg1, mse_deg2, mse_deg3, mse_deg4, mse_deg5)
+results[2,] <- rbind(r2_deg1, r2_deg2, r2_deg3, r2_deg4, r2_deg5)
+
+results
+```
+It is possible to see here that the best model among those five appears to be the third one, since it is the model which gives values of the predictions for the test data that are the closest to the observed values. It transaltes to the lowest MSE, which means, the lowest error during predictions. In the same way, the R^2 for the third model is the highest, and this means that the third model is the one that fits the data the best, almost 97% of them.
+It is important to notice how much the noise affects the results of the fit. In the model above, I set a coefficient for the noise of 0.001, which is a value not extremely high. If I had put a value of 0.5 for example, the results of the MSEs and R2s would have given a different situation, as follows:
+
+```{r implementation with different noise}
+y2 <- cbind(term1 + term2 + term3 + term4 + 0.5*rnorm(100))
+
+results_2 <- matrix(data=NA, nrow=2,ncol=5)
+rownames(results_2)<-cbind("MSE","R2")
+names<-c()
+for (i in 1:5){
+  names[i] <- paste("order", as.character(i))
+}
+colnames(results_2) <- names
+
+splitted_2 <- train_test(X,y2)
+
+matrix_deg1_2 <- model_matrix(splitted_2[[1]][,1],splitted_2[[1]][,2],1); 
+beta_deg1_2 <- betas(matrix_deg1_2, splitted_2[[2]])
+pred_deg1_2 <- predictions(splitted_2[[3]][,1],splitted_2[[3]][,2],1,beta_deg1_2)
+mse_deg1_2 <- mean((splitted_2[[4]] - pred_deg1_2)^2)
+r2_deg1_2 <- 1 - sum((splitted_2[[4]] - pred_deg1_2)^2)/sum((splitted_2[[4]] - mean(splitted_2[[4]]))^2)
+
+
+matrix_deg2_2 <- model_matrix(splitted_2[[1]][,1],splitted_2[[1]][,2],2); 
+beta_deg2_2 <- betas(matrix_deg2_2, splitted_2[[2]])
+pred_deg2_2 <- predictions(splitted_2[[3]][,1],splitted_2[[3]][,2],2,beta_deg2_2)
+mse_deg2_2 <- mean((splitted_2[[4]] - pred_deg2_2)^2)
+r2_deg2_2 <- 1 - sum((splitted_2[[4]] - pred_deg2_2)^2)/sum((splitted_2[[4]] - mean(splitted_2[[4]]))^2)
+
+
+matrix_deg3_2 <- model_matrix(splitted_2[[1]][,1],splitted_2[[1]][,2],3); 
+beta_deg3_2 <- betas(matrix_deg3_2, splitted_2[[2]])
+pred_deg3_2 <- predictions(splitted_2[[3]][,1],splitted_2[[3]][,2],3,beta_deg3_2)
+mse_deg3_2 <- mean((splitted_2[[4]] - pred_deg3_2)^2)
+r2_deg3_2 <- 1 - sum((splitted_2[[4]] - pred_deg3_2)^2)/sum((splitted_2[[4]] - mean(splitted_2[[4]]))^2)
+
+
+matrix_deg4_2 <- model_matrix(splitted_2[[1]][,1],splitted_2[[1]][,2],4); 
+beta_deg4_2 <- betas(matrix_deg4_2, splitted_2[[2]])
+pred_deg4_2 <- predictions(splitted_2[[3]][,1],splitted_2[[3]][,2],4,beta_deg4_2)
+mse_deg4_2 <- mean((splitted_2[[4]] - pred_deg4_2)^2)
+r2_deg4_2 <- 1 - sum((splitted_2[[4]] - pred_deg4_2)^2)/sum((splitted_2[[4]] - mean(splitted_2[[4]]))^2)
+
+
+matrix_deg5_2 <- model_matrix(splitted_2[[1]][,1],splitted_2[[1]][,2],5); 
+beta_deg5_2 <- betas(matrix_deg5_2, splitted_2[[2]])
+pred_deg5_2 <- predictions(splitted_2[[3]][,1],splitted_2[[3]][,2],5,beta_deg5_2)
+mse_deg5_2 <- mean((splitted_2[[4]] - pred_deg5_2)^2)
+r2_deg5_2 <- 1 - sum((splitted_2[[4]] - pred_deg5_2)^2)/sum((splitted_2[[4]] - mean(splitted_2[[4]]))^2)
+
+results_2[1,] <- rbind(mse_deg1_2, mse_deg2_2, mse_deg3_2, mse_deg4_2, mse_deg5_2)
+results_2[2,] <- rbind(r2_deg1_2, r2_deg2_2, r2_deg3_2, r2_deg4_2, r2_deg5_2)
+
+results_2
+
+```
+
+As we can see here, with a higher noise, the model with the lowest MSE is now the the first model, which is the one with the highest R2 as well. In this case we can also point out that model 4 and 5 fit the model even worse than the null model (straight horizontal line), which is why they give a negative R2.
+
+That said, the noise really affect the accurancy of the model, so we should be careful in chosing a right coefficient that might be plausible (thus, we have to consider the magnitude of the data, which here ranges between 0 and 1, so it makes no sense to multiply the noise by 0.5 because it just affects the data too much).
+
+Let's now get back to the case 1 with the noise being multiplied by 0.001. The confidence interval for the coefficients estimator can be obtained as follows:
+
+```{r SE and CI function creation}
+standard_errors <- function(trainY, matX, beta){
+  dSigmaSq <- sum((trainY - matX%*%beta)^2)/(nrow(matX)-ncol(matX))
+mVarCovar <- dSigmaSq*chol2inv(chol(t(matX)%*%matX))
+vStdErr <- sqrt(diag(mVarCovar))
+print(cbind(beta, vStdErr))
+return(vStdErr)}
+
+confidence_int <- function(beta, se){
+  c <- matrix(data = NA, nrow = length(beta), ncol = 2)
+  colnames(c) <- c("Lower","Upper")
+  for (i in 1:length(beta)){
+    interval = cbind(beta[i]-1.96*se[i], beta[i]+1.96*se[i])
+    c[i,] <- interval
+  }
+return(c)}
+```
+
+```{r confidence intervals}
+se_1 <- standard_errors(trainingY, matrix_deg1, beta_deg1)
+confidence_int(beta_deg1, se_1)
+
+se_2 <- standard_errors(trainingY, matrix_deg2, beta_deg2)
+confidence_int(beta_deg2, se_2)
+
+se_3 <- standard_errors(trainingY, matrix_deg3, beta_deg3)
+confidence_int(beta_deg3, se_3)
+
+se_4 <- standard_errors(trainingY, matrix_deg4, beta_deg4)
+confidence_int(beta_deg4, se_4)
+
+se_5 <- standard_errors(trainingY, matrix_deg5, beta_deg5)
+confidence_int(beta_deg5, se_5)
+
+
+```
+
+We can see up above the estimate of the coefficients, their standard errors and corresponding confidence intervals. With a closer look we could for example notice that the interval for the intercept always has positive lower and upper bounds, which means that we can say with a confidence of 95% that the intercept is never equal to zero. As we can further notice, as the order of the polynome increase, the ranges of the intervals get bigger, and sometimes they have a negative lower bound and a positive upper bound. That is, the interval ends up containing the value 0, which is equally likely as the other values in the interval (by definition on confidence interval). That said, when this happens we don't have enough empirical evidence to say, with a condifence of 95%, that that coefficient is different from 0. With a closer look to the polynomial of degree 3 (which was the optimal in terms of MSE and R2) this happens for example for the coefficient corresponding to $x_1, x_1^2, x_1x_2, x_1^3$ and $x_1^2x_2$.
+
+# PROBLEM 2
+
+I am asked to make a figure which displays the test and training MSEs, in order to study their behaviour as the complexity of the model (its order) increases. First, i need to calculate the MSEs for the training data, since I already have calculate the MSEs test.
+
+```{r MSEs training}
+pred_deg_train1 <- predictions(trainingX[,1],trainingX[,2],1,beta_deg1)
+mse_deg_train1 <- mean((trainingY - pred_deg_train1)^2)
+
+pred_deg_train2 <- predictions(trainingX[,1],trainingX[,2],2,beta_deg2)
+mse_deg_train2 <- mean((trainingY - pred_deg_train2)^2)
+
+pred_deg_train3 <- predictions(trainingX[,1],trainingX[,2],3,beta_deg3)
+mse_deg_train3 <- mean((trainingY - pred_deg_train3)^2)
+
+pred_deg_train4 <- predictions(trainingX[,1],trainingX[,2],4,beta_deg4)
+mse_deg_train4 <- mean((trainingY - pred_deg_train4)^2)
+
+pred_deg_train5 <- predictions(trainingX[,1],trainingX[,2],5,beta_deg5)
+mse_deg_train5 <- mean((trainingY - pred_deg_train5)^2)
+```
+
+```{r MSEs matrix}
+msematrix <- data.frame(1:5, rbind(mse_deg1,mse_deg2,mse_deg3,mse_deg4,mse_deg5),rbind(mse_deg_train1,mse_deg_train2,mse_deg_train3,mse_deg_train4,mse_deg_train5))
+colnames(msematrix) <- c("order", "test", "train")
+rownames(msematrix) <- c(1:5)
+msematrix
+```
+
+```{r train vs test MSE plot, message=FALSE, warning=FALSE}
+require(ggplot2)
+
+ggplot()+
+  geom_point(data=msematrix, aes(x=order, y=test), size=2)+
+  geom_line(data=msematrix, aes(x=order, y=test, colour="test"), size=1)+
+  geom_point(data=msematrix, aes(x=order, y=train), size=2)+
+  geom_line(data=msematrix, aes(x=order, y=train, colour="training"), size=1)+
+  ylab("Mse")+ggtitle("Training MSEs vs Test MSEs")
+```
+
+From the plot up above, we can see that as the order of the polynomial increases, the MSE in the training set monotonically decreases. In fact, the model tends to overfit the data, giving predictions very close to the real observed values, which leads to smaller and smaller MSEs (0.00177 for order 5). On the other side, for the MSEs on the test data, we can see an initial reducing until we get to order 3, which is, as shown before, the one that gives the best results in terms of both MSE and R2. After that, the MSE increases since the model tends to overfit the data, so that the predictions $\hat{Y_i}$ on the test set result to be far from the observed values $Y_i$.
+
+From the model $y = f(x) + \epsilon$ with $\epsilon \sim N(0, \sigma^2)$ we can estimate f in terms of $\beta$ and the design matrix X, the is, $\tilde{y} = X\beta$, where $\beta$ minimizes the loss/cost function 
+$C(X,\beta)=\frac{1}{n} \Sigma_{i=0}^{n-1}(y_i-\tilde{y_i})^2=E[(y-\tilde{y})^2]$
+where $E[(y-\tilde{y})^2]$ is defined as the Mean Squared Error or $MSE(y,\tilde{y})$.
+
+We can see that:
+$E[(y-\tilde{y})^2] = E[(f(x)+\epsilon-\hat{f}(x))^2] = E[(f(x)^2+\epsilon^2+\hat{f}(x)^2+2\epsilon f(x) -2f(x)\hat{f}(x) -2\epsilon \hat{f}(x)]$
+
+before moving on, we know that $E[\epsilon]=0$ and that $V(\epsilon)=E[\epsilon^2]-E[\epsilon]^2$ thus it follows that $V(\epsilon)=E[\epsilon^2]-0 =\sigma^2$.
+
+Coming back to the equation we have then:
+$E[(f(x)^2+\epsilon^2+\hat{f}(x)^2+2\epsilon f(x) -2f(x)\hat{f}(x) -2\epsilon \hat{f}(x)]= \sigma^2 + E[(f(x)^2+\hat{f}(x)^2+2\epsilon f(x) -2f(x)\hat{f}(x) -2\epsilon \hat{f}(x)] = \sigma^2 + E[2\epsilon f(x) - 2\epsilon \hat{f}(x)] + E[-2f(x)\hat{f}(x)+f(x)^2+\hat{f}(x)^2]$.
+
+The term $E[2\epsilon f(x) - 2\epsilon \hat{f}(x)]$ is zero because of $E[\epsilon]=0$, so we are just left with
+$E[(y-\tilde{y})^2]= \sigma^2 + E[-2f(x)\hat{f}(x)+f(x)^2+\hat{f}(x)^2]= \sigma^2 + E[(\hat{f}(x)-f(x))^2]$
+
+we can move forward in this way:
+$E[(\hat{f}(x)-f(x))^2] = E[(\hat{f}(x))^2]+E[(f(x))^2]-2E[(\hat{f}(x)(f(x))]$.
+
+We can finally notice that $E[f(x)]=f(x)$ being $f(x)=X\beta$ not random, and $E[(\hat{f}(x))^2] = V[\hat{f}(x)] + E[\hat{f}(x)]^2$ thus $E[(\hat{f}(x)-f(x))^2] = V[\hat{f}(x)] + E[\hat{f}(x)]^2 +f(x)^2-2f(x)E[(\hat{f}(x)] =  V[\hat{f}(x)] + [E[\hat{f}(x)]-f(x)]^2$
+
+Summing up:
+$E[(y-\tilde{y})^2]= \sigma^2 + V[\hat{f}(x)] + [E[\hat{f}(x)]- f(x)]^2$
+which is
+$E[(y-\tilde{y})^2]= \sigma^2 + V[\hat{f}(x)] + Bias[\hat{f}(x)]^2$ as requested.
+
+The term $\sigma^2$ is, as shown before, the variance of the noise, which means that this is an irreducible term due to everything that has not been included in the model (for example interactions with other variables not included in the model or simply bad data collection).
+The term $V[\hat{f}(x)]$ express the variance of the predictions, that is, it tells us how far the preditions on the test data are from their mean value. (it is more related to the accuracy aspect of the model)
+The term $[E[\hat{f}(x)]-f(x)]^2 = Bias[\hat{f}(x)]^2$ tells us how the model captures the true pattern in the dataset on which it has been trained. (it is more related to the explanatory aspect of the model) 
+
+When the model "cares too little about the training set", we might talk about underfitting. It usually comes from a simple model, which is unlikely to fit real life situations, and leads to predictions on the training data which are far from the true value. That said, with unerfitting comes a high bias in the model. When underfitting occours, a change in the training data doesn't affect too much the predictions on the test data, beause the model will not change much. Therefore, with underfitting we *usually* have a low variance as well, even though this doesn't come necessarily.
+On the other side, when the model depends too much on the training data, it will give almost perfect predictions for this set, resulting in a low bias. When this happens, the model will depend too much on noise contained in the training error and will not be able to give accurate predictions for the test data ( which are independent from the training data). Additionally, since the model will eccessively depend ot the training data, it will also have a high varaince: changing the training data will give very different results.
+
+I have already given a explanation of how the Training and Test MSEs behave in the case of the Franke function (Graph above) as function of the model complexity ( order of the polynomial), but it might be interesting to check how they change as the number of data points increases or decreases. To do so, I can considel the third order polynomial model, which is the best among those five, and check how the train and test MSEs change as the number of observations change. 
+
+```{r MSE with different sample size}
+datapoints <- c(20, 50, 100, 150, 200, 1000, 2000)
+comparison_matrix <- as.data.frame(matrix(NA, 7, 3))
+comparison_matrix[,1] <- datapoints
+colnames(comparison_matrix) <- c("n", "mse_test", "mse_train")
+
+for (i in 1:7){
+  n <- datapoints[i]
+  x1_bis <- cbind(runif(n, 0, 1))
+  x2_bis <- cbind(runif(n, 0, 1))
+  X_bis <- as.data.frame(cbind(x1_bis,x2_bis))
+
+  term1_bis <- 0.75 * exp(-(9*x1_bis-2)^2/4 - (9*x2_bis-2)^2/4)
+  term2_bis <- 0.75 * exp(-(9*x1_bis+1)^2/49 - (9*x2_bis+1)/10)
+  term3_bis <- 0.5 * exp(-(9*x1_bis-7)^2/4 - (9*x2_bis-3)^2/4)
+  term4_bis <- -0.2 * exp(-(9*x1_bis-4)^2 - (9*x2_bis-7)^2)
+  
+  y_bis <- cbind(term1_bis + term2_bis + term3_bis + term4_bis + 0.001*rnorm(n))
+  
+  splitted_bis <- train_test(X_bis,y_bis)
+
+  trainingX_bis <- splitted_bis[[1]]
+  trainingY_bis <- splitted_bis[[2]]
+  testX_bis <- splitted_bis[[3]]
+  testY_bis <- splitted_bis[[4]]
+
+  matrix_deg3_bis <- model_matrix(trainingX_bis[,1],trainingX_bis[,2],3)
+  beta_deg3_bis <- betas(matrix_deg3_bis, trainingY_bis)
+  pred_deg3_bis <- predictions(testX_bis[,1],testX_bis[,2],3,beta_deg3_bis)
+  mse_deg3_bis <- mean((testY_bis - pred_deg3_bis)^2)
+
+  pred_deg_train3_bis <- predictions(trainingX_bis[,1],trainingX_bis[,2],3,beta_deg3_bis)
+  mse_deg_train3_bis <- mean((trainingY_bis - pred_deg_train3_bis)^2)
+
+  comparison_matrix[i,] <- cbind(n, mse_deg3_bis, mse_deg_train3_bis)
+}
+
+ggplot()+
+  geom_point(data=comparison_matrix, aes(x=n, y=mse_test), size=2)+
+  geom_line(data=comparison_matrix, aes(x=n, y=mse_test, colour="mse_test"), size=1)+
+  geom_point(data=comparison_matrix, aes(x=n, y=mse_train), size=2)+
+  geom_line(data=comparison_matrix, aes(x=n, y=mse_train, colour="mse_train"), size=1)+
+  ylab("Mse")+ggtitle("Training MSEs vs Test MSEs")
+```
+
+We can see that as the sample size increases, the MSE train increases as well, due to the fact that the model doesn't overfit and, on the other and, it gives "more importance" to the test data, compared to what it does with small sample sizes. From this point of view, we can also notice that the MSE test tends to decrease as n increases, for the same reason as before. I added the 
+cases n=1000 and n=2000 to show that since these MSEs are estimators of the real MSE (with bias of order $n^{-1}$), as *n* increases (and hypothetically goes to $\infty$), their value get closer to the real MSE. 
+
+Now i use the bootstrap resampling method to evaluate not only how the MSEs (of the predictor $\hat{f}(x)$ change as the order of the polynomial increases, but also to understand the impact of its two components, the variance and the bias.
+Here i create 1000 bootstrap sample from the training set i used before, and for each order of the polynomial I thus obtain 1000 predictions for the 20 test data. From these prediction, i estimate the Bias and the variance of the predictor in addition to the mse. The last column of the results matrix prove the mse decomposition, that is, $MSE=VAR+BIAS^2$ (to which we should also add the variance of the noise).
+
+```{r bootstrap ,message=FALSE, warning=FALSE}
+set.seed(29012001)
+
+pre = function(data, index, datitest) return(predict(lm(trainingY ~.-1,data = as.data.frame(data),
+                                                                      subset = index), newdata=datitest))
+
+numofboot <- 500
+results_matrix <- matrix(NA, 5,5)
+colnames(results_matrix) <- c("order","MSE","bias2","variance","proof")
+for (degree in 1:5){
+  
+  mat <- get(paste("matrix_deg",toString(degree),sep=""))
+  test <- get(paste("testX_", toString(degree), sep=""))
+  prediction_matrix <- matrix(0, nrow = nrow(testX), ncol = numofboot) # 20x500 matrix
+  prediction_means <- matrix(0,1,nrow = nrow(testX)) # 20x1 vector
+  rownames(prediction_matrix) <- rownames(testX)
+  
+  for (k in 1:numofboot){
+    p <- pre(mat, sample(as.numeric(rownames(trainingX)), 80, replace = T),test)
+    
+    prediction_matrix[,k] = cbind(p) #fill the matrix with predictions for each bootstrap
+  }
+  
+  for (i in 1:nrow(prediction_matrix)){
+    
+   prediction_means[i,] <- mean(prediction_matrix[i,]) #filling the vector with the mean prediction for each test data
+  }
+  bias_squared <- mean((testY - prediction_means)^2)
+  
+  q <- matrix(0,1,nrow = nrow(testX))
+  for (k in 1:ncol(prediction_matrix)){
+  q <- q + (prediction_matrix[,k]-prediction_means)^2}
+  variance <- 1/(numofboot*20)*sum(q); variance
+  
+  m <- matrix(0,1,nrow = nrow(testX))
+  for (k in 1:ncol(prediction_matrix)){
+  m <- m + (testY - prediction_matrix[,k])^2}
+  mean_squared_error <- 1/(numofboot*20) * sum(m); mean_squared_error
+  
+  proof <- mean_squared_error- variance -bias_squared
+  results_matrix[degree,] <- c(degree,mean_squared_error, bias_squared, variance, round(proof,8))
+}
+results_matrix
+
+
+```
+
+
+```{r bootstrap results plot}
+require(ggplot2)
+ggplot()+
+  geom_point(data=as.data.frame(results_matrix), aes(x=order, y=variance), size=2)+
+  geom_line(data=as.data.frame(results_matrix), aes(x=order, y=variance, colour="variance"), size=1)+
+  geom_point(data=as.data.frame(results_matrix), aes(x=order, y=bias2), size=2)+
+  geom_line(data=as.data.frame(results_matrix), aes(x=order, y=bias2, colour="bias2"), size=1)+
+  geom_point(data=as.data.frame(results_matrix), aes(x=order, y=MSE), size=2)+
+  geom_line(data=as.data.frame(results_matrix), aes(x=order, y=MSE, colour="MSE"), size=1)
+```
+
+The graph above gives an insights of the bias-variance tradeoff. It is possible to see that the lowest MSE is once again reached by the third order polynomial. Apart from the increase on the second order, the MSE is decreasing before the third order and increasing after it (Usually this is represented as a U shape, but it really depends on the nature and quality of the data).
+For the variance, we can see that it increases monotonically: as the model gets more complex, the 500 predictions on each test data get more different, and thus further from their mean value. 
+On the other side, the bias has a different behaviour. Usually, the bias should be monotonically decreasing as the complexity of the model increases. However, it is crucial to notice that the polynomials I am using to fit the data have predictors that are highly correlated (as shown when I analyzed the confidence intervals for the $\beta_j's$), and it has been proved that when we have highly correlated variables in a model, the bias can increas, and this is what happens for the fourth order, and in fifth as well if compared to the first, second and third orders.
+
+# PROBLEM 3
+
+Bolow there's my code for k-fold cross validation split. I will implement it as a 5-fold at first, the a 10-fold and a n-fold as well, in order to see how much the results change in terms of MSE (train and test)
+
+When we have a small dataset (like the one I created, which has just 100 "observations"), the values we obtain for the statistics we are interested in may be misleading, since they would be obtained using one single sample (of a small size).
+Therefore, we can use cross validation to "fake" more than one training and test sets from the dataset we are given. For each of these test sets we can hence obtain the value for the statistic of interest and then average those values, obtaining a more reliable quantity. 
+Talking about the test MSE, since it depends on the values I use to test the model, it is completely normal that different sets of observations return different values for this statistic: i need to use more samples.
+Consequently, a clever way to move is to use cross validation. in addition to 5 and 10 folds cross validation, i decided to use leave-one-out-cross-validation as well (LOOCV), in order to have a bettre understanding of how the MSE changes with the umber of folds.
+
+Here I implement the cross validation estimation method and plot the results of the MSE, comparing with the "one sample" case as well:
+
+```{r cross validation, message=FALSE, warning=FALSE}
+require(gridExtra)
+
+numfolds <- c(5,10,nrow(dataset))
+matrixlist <- list()
+msematrix_cv <- as.data.frame(matrix(NA, nrow = 5,3))
+colnames(msematrix_cv) <- c("order", "test_cv", "train_cv")
+ 
+
+for (k in 1:length(numfolds)){
+  folds<-cut(seq(1,nrow(dataset)),breaks=numfolds[k],labels=FALSE)
+
+  for (degree in 1:5){
+    
+    msestest <- c()
+    msestrain <- c()
+    
+    for(i in 1:numfolds[k]){ 
+      
+      testIndexes_cv <- which(folds==i,arr.ind=TRUE)
+      testData_cv <- dataset[testIndexes_cv, ]
+      trainData_cv <- dataset[-testIndexes_cv, ]
+      dataset_cv<-model_matrix(trainData_cv[,1],trainData_cv[,2],degree)
+      beta_cv <- betas(dataset_cv, trainData_cv[,3])
+      predmse_cv <- predictions(testData_cv[,1],testData_cv[,2],degree,beta_cv)
+      msetest_cv <- mean((testData_cv[,3] - predmse_cv)^2)
+      predtrain_cv<-predictions(trainData_cv[,1],trainData_cv[,2],degree,beta_cv)
+      msetrain_cv <- mean((trainData_cv[,3] - predtrain_cv)^2)
+      msestest[i] <- msetest_cv
+      msestrain[i] <- msetrain_cv
+    }
+    
+    msematrix_cv[degree,] <- c(degree, mean(msestest), mean(msestrain))
+  }
+  
+  matrixlist[[k]] <- msematrix_cv
+}
+fivefolds<- matrixlist[[1]]
+tenfolds <- matrixlist[[2]]
+nfolds <- matrixlist[[3]]
+
+p1 <- ggplot()+  geom_point(data=msematrix, aes(x=order, y=test), size=2)+  geom_line(data=msematrix, aes(x=order, y=test, colour="test"), size=1)+  geom_point(data=msematrix, aes(x=order, y=train), size=2)+  geom_line(data=msematrix, aes(x=order, y=train, colour="training"), size=1)+  ylab("Mse")+ggtitle("Tr MSE vs Te MSEs 1 sample")
+
+p2 <- ggplot()+  geom_point(data=fivefolds, aes(x=order, y=test_cv), size=2)+  geom_line(data=fivefolds, aes(x=order, y=test_cv, colour="test_cv"), size=1)+  geom_point(data=fivefolds, aes(x=order, y=train_cv), size=2)+  geom_line(data=fivefolds, aes(x=order, y=train_cv, colour="train_cv"), size=1)+  ylab("Mse")+ggtitle("Tr MSE vs Te MSE 5-FOLDS CV")
+
+p3 <- ggplot()+  geom_point(data=tenfolds, aes(x=order, y=test_cv), size=2)+  geom_line(data=tenfolds, aes(x=order, y=test_cv, colour="test_cv"), size=1)+  geom_point(data=tenfolds, aes(x=order, y=train_cv), size=2)+  geom_line(data=tenfolds, aes(x=order, y=train_cv, colour="train_cv"), size=1)+  ylab("Mse")+ggtitle("Tr MSE vs Te MSE 10-FOLDS CV")
+
+p4 <- ggplot()+  geom_point(data=nfolds, aes(x=order, y=test_cv), size=2)+  geom_line(data=nfolds, aes(x=order, y=test_cv, colour="test_cv"), size=1)+  geom_point(data=nfolds, aes(x=order, y=train_cv), size=2)+  geom_line(data=nfolds, aes(x=order, y=train_cv, colour="train_cv"), size=1)+  ylab("Mse")+ggtitle("Tr MSE vs Te MSE k-FOLDS CV")
+
+grid.arrange(p1, p2, p3, p4, ncol = 2, nrow=2)
+
+```
+
+As we can see, the first plot is has values that fluctuate a lot, in comparison to the other graphs, and that is because those values are very much affected by the training and test set I used. In the other three graphs, it stands out that the results are "smoother" (because of having averaged out). Since the train MSEs are obtained on more values (80) than the test MSEs, each fold tends, for each order of the polynomial, to give a value which is closer to the mean MSE. Therfore, the cross validation train MSEs are relatively the same from the 5 fold case to the 10 and LOOCV case. (with the LOOCV we also get a minimum Bias, since the training sets differ only for one observation,  and a higher variance in the manwhile, since the model "over depends" on the train sets . That's another proof of the trade-off)
+On the other hand, what happens for the test MSE is that it is obtained on fewer values (20 instead of 80). In this case, it really helps to use as much samples as possible, because each fold might give a very different value. Therefore, the more samples (folds) I use, the more accurate the test MSE will be, despite the order of the polynomial.
+In other words, looking at the graphs, we can see that the test MSEs for the fouth and fifth order get lower as I increase the number of folds: I avoid overfitting by varing many times the set I learn the model on, that is, the model generalizes better. As a result, increasing the number of folds, the test MSEs does not increases as much as it does for the 1 sample case. If I had increased the order of the polynomial up to order 10 or more, i would have probably seen a bigger increase in the test MSE for the 10 folds cv, and would have needed to check more situations between the 10 and k folds.
+
+I can now do a comparison between the test MSEs that i got from the different methods:
+
+```{r final comparisons}
+comparisonMSE <- matrix(NA, 5, 4)
+dimnames(comparisonMSE) <- list(c(1:5), c("5-folds", "10-folds", "n-folds", "bootstrap"))
+comparisonMSE[,1] <- fivefolds[,2]
+comparisonMSE[,2] <- tenfolds[,2]
+comparisonMSE[,3] <- nfolds[,2]
+comparisonMSE[,4] <- results_matrix[,2]
+comparisonMSE
+```
+
+As we can see, apart from the first order polynomial, for the other four degree the test MSEs  we obtain with the bootstrap resampling method are higher than the cross validation results that I just obtained. 
+It has been proved that (on average) in the bootstrap method, inside each of the samples obtained from the first one there are, aproximately, only 63.2% observations that are drawn only once. Because of this, the test MSEs obtained as before come from models that tend to a mild overfit, and it is followed by an increase on the test MSE, as noted before.
+We can also see that as the used method change (or the number of folds changes), a different model is identified as the "best on" in terms of tets MSE. In particular, the 5 fold and the bootstrap would lead to choose the third one, while the 10 folds would lead to the fourth order and the n folds to the fifth one.
+In general, the bias decreases as the number k of fold increases in cross validation. Once again we hence want a model which has the lowest variance as possible while keeping the bias low as well. The choose of k, and then of the model to keep, closely depends on the data I have, the size of the sample, ect.. so there is no real "general rule", even though the 5 and 10 folds cases are the most implemented.
+
+#PROBLEM 4
+
+When we want to select a model to fit the data, we want one that is able both to explain them well and, hopefully at the same time, and to predict values for new and unseen data. Generally, focusing now about predictions, we can encounter three types of errors, as said before: the bias, the variance and the unexplainable variance (or irreducible error, about which is, as the name says, we can't do anything about).
+If we actually have the "right" model, the ordinary least squares parameter estimates will be unbiased and will have minimal variance among all unbiased linear estimators (BLUE estimators). Coming from this, the OLS model will give the best linear unbiased predictions. Even though it may look like the best model we can think of, having the minimal variance among the BLUEs doesn't really mean that this variance is going to be low. Actually, it can be very large (we will also have to take into account the complexity of the model).
+From these observations, it follows that we could decide to sacrifice the unbiasedness to save a lot (we hope) of variance
+This is called the bias-variance tradeoff. 
+
+Following from these observations, we can introduce Ridge regression, which is an extention of Linear regression. Ridge works by adding a factor $\lambda$ (penalty factor) when we estimate the coefficients of the model. This factor penalizes high values of these coefficients by shrinking them. For this reason, it is obcious how important it is to scale the data beforehand: if we do not scale them, the corresponding coefficients might be high just for a matter of magnitude, and it would lead to wrong or misleading results. If the features have different scales, they contribute differently to the penalized term (which is a sum of squares of the $\beta_j's$) Even though the data i'm referring to is already scaled, I will now write a scalation function to implement it later in exercise 6
+
+```{r scaling function}
+scaling <- function(vector){
+  mysd <- function(u) sqrt(sum((u - mean(u))^2)/length(u))
+  vnew <- scale(vector, center = TRUE, scale = apply(vector,2,mysd))
+  return(vnew)
+}
+```
+
+```{r scaled data 1}
+scaled_trainingX <- cbind(scaling(trainingX))
+rownames(scaled_trainingX) <- translate(rownames(trainingX))
+scaled_trainingY <- scaling(as.matrix(trainingY))
+rownames(scaled_trainingY) <- translate(rownames(trainingX))
+scaled_testX <- cbind(scaling(testX)) 
+rownames(scaled_testX) <- translate(rownames(testX))
+scaled_testY<- scaling(as.matrix(testY))
+rownames(scaled_testY) <- translate(rownames(testX))
+```
+
+```{r scaled data 2}
+matrix_deg_sc1 <- model_matrix(scaled_trainingX[,1],scaled_trainingX[,2],1)
+matrix_deg_sc2 <- model_matrix(scaled_trainingX[,1],scaled_trainingX[,2],2)
+matrix_deg_sc3 <- model_matrix(scaled_trainingX[,1],scaled_trainingX[,2],3)
+matrix_deg_sc4 <- model_matrix(scaled_trainingX[,1],scaled_trainingX[,2],4)
+matrix_deg_sc5 <- model_matrix(scaled_trainingX[,1],scaled_trainingX[,2],5)
+
+testX_sc_1 <- as.data.frame(model_matrix(scaled_testX[,1],scaled_testX[,2],1))
+testX_sc_2 <- as.data.frame(model_matrix(scaled_testX[,1],scaled_testX[,2],2))
+testX_sc_3 <- as.data.frame(model_matrix(scaled_testX[,1],scaled_testX[,2],3))
+testX_sc_4 <- as.data.frame(model_matrix(scaled_testX[,1],scaled_testX[,2],4))
+testX_sc_5 <- as.data.frame(model_matrix(scaled_testX[,1],scaled_testX[,2],5))
+```
+
+What we do with Ridge regression, thus, is obtaining a estimator of $\beta$ which is not unbiased, but that give an MSE which is smaller than the one given by the OLS. In particular, it has been proved that there always exists a value of $\lambda$ such that the ridge estimato has lower MSE than the OLS estimator: to choose the best value of $\lambda$ among a grid of values we can use cross validation (as shown below) and look for the one that gives the lowest test MSE.
+Even though Ridge regression enforce the coefficients to converge to 0, their value will not be exactly zero: coming from this, Ridge can be a useful tool to reduce the impact of the corresponding variables, but will not perform a proper variable selection.
+
+The following function gives the $\hat{\beta}^{ridge}$ estimate of the coefficients:
+
+```{r betaridge function}
+betaridge <- function(matX,vec_y,lambda){
+  ridge <- solve(t(matX) %*% matX + lambda * diag(1,ncol(matX), ncol(matX))) %*% t(matX) %*% vec_y
+  return(ridge)
+}
+```
+
+Here i am using scaled data with the functions that I just created:
+
+```{r ridge regression bootstrap}
+numlambda <- 10
+mseridge <- list()
+lambdas <- 10^(seq(2,-2,length=numlambda))
+pred_rid = function(matrice, index, datitest, trainy, lambda){
+    index <- translate(index)
+    ridge_b<-betaridge(matrice[index,], trainy[index,], lambda)
+    return(predictions(datitest[,1],datitest[,2],degree,ridge_b))}
+
+ty <- cbind(trainingY)
+rownames(ty) <- translate(rownames(trainingX))
+
+for (l in 1:numlambda){
+  lmb <- lambdas[l]
+  numofboot_r <- 1000
+  results_matrix_r <- matrix(NA, 5,6)
+  colnames(results_matrix_r) <- c("order","MSE","bias2","variance","proof", "used_lambda")
+  for (degree in 1:5){
+    mat_r <- get(paste("matrix_deg",toString(degree),sep=""))
+    test_r <- get(paste("testX_", toString(degree), sep=""))
+    prediction_matrix_r <- matrix(0, nrow = nrow(testX), ncol = numofboot_r)
+    prediction_means_r <- matrix(0,1,nrow = nrow(testX))
+    rownames(prediction_matrix_r) <- rownames(testX)
+    for (f in 1:numofboot_r){
+      p_r <- pred_rid(mat_r,sample(as.numeric(rownames(trainingX)), 80, replace = T),test_r, ty, lmb)
+      prediction_matrix_r[,f] = cbind(p_r) 
+    }
+    
+    for (i in 1:nrow(prediction_matrix_r)){
+      
+    prediction_means_r[i,] <- mean(prediction_matrix_r[i,])}
+    bias_squared_r <- mean((testY - prediction_means_r)^2)
+    
+    q_r <- matrix(0,1,nrow = nrow(testX))
+    for (z in 1:ncol(prediction_matrix_r)){
+    q_r <- q_r + (prediction_matrix_r[,z]-prediction_means_r)^2}
+    variance_r <- 1/(numofboot_r*20)*sum(q_r); variance_r
+    
+    m_r <- matrix(0,1,nrow = nrow(testX))
+    for (k in 1:ncol(prediction_matrix_r)){
+    m_r <- m_r + (testY - prediction_matrix_r[,k])^2}
+    mean_squared_error_r <- 1/(numofboot_r*20) * sum(m_r); mean_squared_error_r
+    
+    proof_r <- mean_squared_error_r- variance_r -bias_squared_r
+    results_matrix_r[degree,] <- c(degree,mean_squared_error_r, bias_squared_r, variance_r, round(proof_r,8), lmb)
+  }
+  mseridge[[l]] <- results_matrix_r
+}
+mseridge[[10]] 
+
+```
+
+```{r}
+lambdamses <- as.data.frame(matrix(NA, nrow = 5, ncol = numlambda+1))
+lambdamses[,1] <- c(1:5)
+colnames(lambdamses) <- c( "order",round(lambdas, 3))
+rownames(lambdamses) <- c(1:5)
+for (M in 1:length(mseridge)){
+  ma <- mseridge[[M]]
+  mse_ <- ma[,2]
+  lambdamses[,M+1] <- mse_
+}
+lambdamses
+```
+
+
+I can now plot the different MSEs given by the 10 lambdas as the order of the polynomial increases:
+
+```{r bootstrap plot}
+require(ggplot2)
+ggplot()+  geom_point(data=lambdamses, aes(x=order, y=lambdamses[,2]), size=2)+  geom_line(data=lambdamses, aes(x=order, y=lambdamses[,2], colour="100"), size=1)+  geom_point(data=lambdamses, aes(x=order, y=lambdamses[,3]), size=2)+  geom_line(data=lambdamses, aes(x=order, y=lambdamses[,3], colour="35.938"), size=1)+  geom_point(data=lambdamses, aes(x=order, y=lambdamses[,4]), size=2)+  geom_line(data=lambdamses, aes(x=order, y=lambdamses[,4], colour="12.915"), size=1)+  geom_point(data=lambdamses, aes(x=order, y=lambdamses[,5]), size=2)+  geom_line(data=lambdamses, aes(x=order, y=lambdamses[,5], colour="4.642"), size=1)+  geom_point(data=lambdamses, aes(x=order, y=lambdamses[,6]), size=2)+  geom_line(data=lambdamses, aes(x=order, y=lambdamses[,6], colour="1.668"), size=1)+  geom_point(data=lambdamses, aes(x=order, y=lambdamses[,7]), size=2)+  geom_line(data=lambdamses, aes(x=order, y=lambdamses[,7], colour="0.599"), size=1)+  geom_point(data=lambdamses, aes(x=order, y=lambdamses[,8]), size=2)+  geom_line(data=lambdamses, aes(x=order, y=lambdamses[,8], colour="0.215"), size=1)+  geom_point(data=lambdamses, aes(x=order, y=lambdamses[,9]), size=2)+  geom_line(data=lambdamses, aes(x=order, y=lambdamses[,9], colour="0.077"), size=1)+  geom_point(data=lambdamses, aes(x=order, y=lambdamses[,10]), size=2)+  geom_line(data=lambdamses, aes(x=order, y=lambdamses[,10], colour="0.028"), size=1)+  geom_point(data=lambdamses, aes(x=order, y=lambdamses[,11]), size=2)+  geom_line(data=lambdamses, aes(x=order, y=lambdamses[,11], colour="0.01"), size=1)+  ylab("Mse test")+ggtitle("MSE test for different lambdas and degrees")
+```
+
+We can see that for the first order of the polynomial, I am dealing with two betas only, and i am trying to penalize them with lambda. Since they are not "useless", the value of lambda that is needed to penalize them is pretty high. Since the first order polynomial doesn't fit the data well, as we showed before with the OLS, if I do not 
+
+We can see that as the value of lambda changes, the minimum bootstrap MSE for each of them is reached at different orders of the polynomials. 
+
+```{r}
+numlambda <- 10
+lambdas <- 10^(seq(-2,2,length=numlambda))
+
+matrixlist_rid5 <- list()
+ 
+for (l in 1:numlambda){
+  lmb_rid5 <- lambdas[l]
+  msematrix_cv_rid5 <- as.data.frame(matrix(NA, nrow = 5,4))
+  colnames(msematrix_cv_rid5) <- c("used lambda","order", "test_cv", "train_cv")
+  folds_rid5<-cut(seq(1,nrow(dataset)),breaks=5,labels=FALSE)
+    
+    for (degree in 1:5){
+      
+      msestest_rid5 <- c()
+      msestrain_rid5 <- c()
+      
+      for(i in 1:5){ 
+        
+        testIndexes_cv_rid5 <- which(folds_rid5==i,arr.ind=TRUE)
+        testData_cv_rid5 <- dataset[testIndexes_cv_rid5, ]
+        trainData_cv_rid5 <- dataset[-testIndexes_cv_rid5, ]
+        dataset_cv_rid5<-model_matrix(trainData_cv_rid5[,1],trainData_cv_rid5[,2],degree)
+        beta_cv_rid5 <- betaridge(dataset_cv_rid5, trainData_cv_rid5[,3], lmb_rid5)
+        predmse_cv_rid5 <- predictions(testData_cv_rid5[,1],testData_cv_rid5[,2],degree,beta_cv_rid5)
+        msetest_cv_rid5 <- mean((testData_cv_rid5[,3] - predmse_cv_rid5)^2)
+        predtrain_cv_rid5<-predictions(trainData_cv_rid5[,1],trainData_cv_rid5[,2],degree,beta_cv_rid5)
+        msetrain_cv_rid5 <- mean((trainData_cv_rid5[,3] - predtrain_cv_rid5)^2)
+        msestest_rid5[i] <- msetest_cv_rid5
+        msestrain_rid5[i] <- msetrain_cv_rid5
+      }
+      
+      msematrix_cv_rid5[degree,] <- c(lmb_rid5, degree, mean(msestest_rid5), mean(msestrain_rid5))
+    }
+    
+    matrixlist_rid5[[l]] <- msematrix_cv_rid5
+}
+matrixlist_rid5[[1]]
+```  
+
+```{r}
+numlambda <- 10
+lambdas <- 10^(seq(-2,2,length=numlambda))
+
+matrixlist_rid10 <- list()
+ 
+for (l in 1:numlambda){
+  lmb_rid10 <- lambdas[l]
+  msematrix_cv_rid10 <- as.data.frame(matrix(NA, nrow = 5,4))
+  colnames(msematrix_cv_rid10) <- c("used lambda","order", "test_cv", "train_cv")
+  folds_rid10<-cut(seq(1,nrow(dataset)),breaks=10,labels=FALSE)
+  
+    
+    for (degree in 1:5){
+      
+      msestest_rid10 <- c()
+      msestrain_rid10 <- c()
+      
+      for(i in 1:10){ 
+        
+        testIndexes_cv_rid10 <- which(folds_rid10==i,arr.ind=TRUE)
+        testData_cv_rid10 <- dataset[testIndexes_cv_rid10, ]
+        trainData_cv_rid10 <- dataset[-testIndexes_cv_rid10, ]
+        dataset_cv_rid10<-model_matrix(trainData_cv_rid10[,1],trainData_cv_rid10[,2],degree)
+        beta_cv_rid10 <- betaridge(dataset_cv_rid10, trainData_cv_rid10[,3], lmb_rid10)
+        predmse_cv_rid10 <- predictions(testData_cv_rid10[,1],testData_cv_rid10[,2],degree,beta_cv_rid10)
+        msetest_cv_rid10 <- mean((testData_cv_rid10[,3] - predmse_cv_rid10)^2)
+        predtrain_cv_rid10<-predictions(trainData_cv_rid10[,1],trainData_cv_rid10[,2],degree,beta_cv_rid10)
+        msetrain_cv_rid10 <- mean((trainData_cv_rid10[,3] - predtrain_cv_rid10)^2)
+        msestest_rid10[i] <- msetest_cv_rid10
+        msestrain_rid10[i] <- msetrain_cv_rid10
+      }
+      
+      msematrix_cv_rid10[degree,] <- c(lmb_rid10, degree, mean(msestest_rid10), mean(msestrain_rid10))
+    }
+    
+    matrixlist_rid10[[l]] <- msematrix_cv_rid10
+}
+```  
+
+```{r}
+#CROSS VALIDATION WITH THE SAME TEST SET 
+
+numlambda <- 10
+lambdas <- 10^(seq(-2,2,length=numlambda))
+Zmatrixlist_rid10 <- list()
+ZtestData_cv_rid10 <- testX
+trainingY <- cbind(trainingY)
+rownames(trainingY) <- rownames(trainingX)
+
+for (l in 1:numlambda){
+  Zlmb_rid10 <- lambdas[l]
+  Zmsematrix_cv_rid10 <- as.data.frame(matrix(NA, nrow = 5,4))
+  colnames(Zmsematrix_cv_rid10) <- c("used lambda","order", "test_cv", "train_cv")
+  Zfolds_rid10<-cut(seq(1,nrow(trainingX)),breaks=10,labels=FALSE)
+  
+    for (degree in 1:5){
+      
+      Zmsestest_rid10 <- c()
+      Zmsestrain_rid10 <- c()
+      
+      for(i in 1:10){ 
+        
+        ZtestIndexes_cv_rid10 <- which(Zfolds_rid10==i,arr.ind=TRUE)
+        datatrainX_ridge10 <- trainingX[-ZtestIndexes_cv_rid10, ]
+        datatrainY_ridge10 <- trainingY[-ZtestIndexes_cv_rid10, ]
+        Zdataset_cv_rid10<-model_matrix(datatrainX_ridge10[,1],datatrainX_ridge10[,2],degree)
+        Zbeta_cv_rid10 <- betaridge(Zdataset_cv_rid10, datatrainY_ridge10, l)
+        Zpredmse_cv_rid10 <- predictions(testX[,1],testX[,2],degree,Zbeta_cv_rid10)
+        Zmsetest_cv_rid10 <- mean((testY - Zpredmse_cv_rid10)^2)
+        Zpredtrain_cv_rid10<-predictions(datatrainX_ridge10[,1],datatrainX_ridge10[,2],degree,Zbeta_cv_rid10)
+        Zmsetrain_cv_rid10 <- mean((datatrainY_ridge10 - Zpredtrain_cv_rid10)^2)
+        Zmsestest_rid10[i] <- Zmsetest_cv_rid10
+        Zmsestrain_rid10[i] <- Zmsetrain_cv_rid10
+      }
+      
+      Zmsematrix_cv_rid10[degree,] <- c(Zlmb_rid10, degree, mean(Zmsestest_rid10), mean(Zmsestrain_rid10))
+    }
+    
+    Zmatrixlist_rid10[[l]] <- Zmsematrix_cv_rid10
+}
+Zmatrixlist_rid10[[1]]
+matrixlist_rid10[[1]]
+```
+
+
+We can now use the resuts obtained with the cross validation to check, for each order of the polynomial, which is the best lambda to use. I will also use a bult-in R function to show that the results are the same:
+
+5 FOLDS:
+
+```{r}
+s5 <- as.data.frame(matrix(NA, nrow = 5, ncol = numlambda+1))
+s5[,1] <- c(1:5)
+colnames(s5) <- c( "order",round(lambdas, 3))
+rownames(s5) <- c(1:5)
+for (M in 1:length(matrixlist_rid5)){
+  mt <- matrixlist_rid5[[M]]
+  msete5 <- mt[,3]
+  s5[,M+1] <- msete5}
+
+bestlam_cv5 <- matrix(NA,5,1)
+dimnames(bestlam_cv5) <- list(c("order 1","order 2","order 3","order 4","order 5"),"lambdas")
+for (row in 1:5){
+  lb_cv5 <- which.min(s5[row,])
+  bestlam_cv5[row,] <- colnames(s5)[lb_cv5]
+}
+bestlam_cv5
+```
+
+```{r message=FALSE, warning=FALSE}
+require(glmnet)
+lambdas <- 10^(seq(-2,2,length=numlambda))
+p5 <- matrix(NA,5,2)
+dimnames(p5) <- list(1:5, c("order", "best lambda"))
+testfeatures <- list(testX_sc_1, testX_sc_2,testX_sc_3,testX_sc_4,testX_sc_5)
+for (order in 1:5){
+  mt <- get(paste("matrix_deg_sc",toString(order),sep=""))
+  cv_ridge <- cv.glmnet(mt, scaled_trainingY, alpha = 0, lambda = lambdas, nfolds = 5)
+  optimal_lambda <- cv_ridge$lambda.min
+  p5[order,] <- c(order, optimal_lambda)
+}
+p5 
+```
+
+
+```{r}
+s10 <- as.data.frame(matrix(NA, nrow = 5, ncol = numlambda+1))
+s10[,1] <- c(1:5)
+colnames(s10) <- c( "order",round(lambdas, 3))
+rownames(s10) <- c(1:5)
+for (M in 1:length(matrixlist_rid10)){
+  mt <- matrixlist_rid10[[M]]
+  msete10 <- mt[,3]
+  s10[,M+1] <- msete10}
+
+bestlam_cv10 <- matrix(NA,5,1)
+dimnames(bestlam_cv10) <- list(c("order 1","order 2","order 3","order 4","order 5"),"lambdas")
+for (row in 1:5){
+  lb_cv10 <- which.min(s10[row,])
+  bestlam_cv10[row,] <- colnames(s10)[lb_cv10]
+}
+bestlam_cv10
+```
+
+```{r message=FALSE, warning=FALSE}
+require(glmnet)
+lambdas <- 10^(seq(-2,2,length=numlambda))
+p10 <- matrix(NA,5,2)
+dimnames(p10) <- list(1:5, c("order", "best lambda"))
+for (order in 1:5){
+  mt <- get(paste("matrix_deg_sc",toString(order),sep=""))
+  cv_ridge <- cv.glmnet(mt, scaled_trainingY, alpha = 0, lambda = lambdas, nfolds = 10, type.measure="mse")
+  optimal_lambda <- cv_ridge$lambda.min
+  p10[order,] <- c(order, optimal_lambda)
+  
+    #cv_ridge$cvm[cv_ridge$lambda==cv_ridge$lambda.min] to show which is the minimum MSE
+  #Note that with cv_ridge$lambda that cv.glmnet gives the lambdas in decreasing order, so from cv_ridge$cvm the last value is the one we have to look at, and it corresponds to the best value (0.01 in 4 out of 5 cases).
+
+ }
+p10
+```
+
+We can see here that both the 5 and the 10 folds cross validations suggest, for each order of the polynomial, to choose the value 0.135 for lambda. It is possible to observe that the explicit and the build-in code give the same results :)
+
+It obviously depends on the values of lambda I use for cross validation, so if I had used a different set of values I would have obtained a different choosen penalization. If I don't choose a set of lambdas, the functions will give this values, showing that probably the ones I put as default could be set as smaller:
+
+```{r}
+require(glmnet)
+pr <- matrix(NA,5,2)
+dimnames(pr) <- list(1:5, c("order", "best lambda"))
+for (order in 1:5){
+  mt <- get(paste("matrix_deg",toString(order),sep=""))
+  cv_ridger <- cv.glmnet(mt, trainingY, alpha = 0, nfolds = 10, type.measure="mse")
+  par(mfrow=c(1,2))
+  plot(cv_ridger)
+  plot(cv_ridger$glmnet.fit, xvar="lambda", label=5)
+  optimal_lambdar <- cv_ridger$lambda.min
+  pr[order,] <- c(order, optimal_lambdar)}
+pr
+```
+
+
+# PROBLEM 5
+
+I am now asked to use lasso regression, another regression method that can be used for regularization, since it introduce a penalization term as Ridge does. Additionally, lasso also works as a variable selector, since it enforces the $\beta's$ to be exactly zero when their correspondent variable are not drammatically important in explaining the response. 
+ 
+Once again, as in Ridge, cross validation comes in help to choose the best lambda in terms of the correspondent test MSE. This lambda will give us the vector of coefficients $\beta_j's$, which we can use to obtain predictions, Rsquared, ecc..
+
+In this case I am using a built-in function of R contained in the library `glmnet`, which allows find the best lambdas for each degree of the polynomial. 
+
+```{r}
+library(glmnet)
+
+pl <- matrix(NA,5,2)
+dimnames(pl) <- list(1:5, c("order", "best lambda"))
+for (order in 1:5){
+  mt <- get(paste("matrix_deg",toString(order),sep=""))
+
+  cv_model <- cv.glmnet(mt, trainingY, alpha = 1)
+  best_lambda <- cv_model$lambda.min
+  pl[order,] <- c(order, best_lambda)}
+pl
+```
+
+According to the default set of lambdas that the function analyzes, the values above are the best for the lasso regression in terms of test MSEs. We can also observe how the MSE changes as the value of lambda does, that is:
+
+```{r}
+matt <- matrix_deg3
+colnames(matt) <- c("int", "x1", "x2", "x1^2", "x2^2", "x1*x2", "x1^3", "x2^3", "(x1^2)*x2", "x1*(x2^2)")
+cv_model3 <- cv.glmnet(matt, trainingY, alpha = 1)
+plot(cv_model3)
+```
+
+As we can see, as lambda increases (and so does its logarithm), the MSE decrease in the very first place (reaching lambda min where the first dotted line is) and then increses exponentially. It is also possible to notice that as lambda increases, the standard error of the MSE increases as well (the upper and lower bar for each point are the MSE +/- its SE), and so its estimate gets less precise.
+
+We can also see what happens in terms of coefficients:
+
+```{r}
+plot(cv_model3$glmnet.fit, xvar="lambda", label=5)
+```
+
+We can see here that as the value of lambda increases, more and more $\beta's$ are shrinked to zero. In particular we can see that after log($\lambda$) get clore to -6, almost all of the coefficients are shrinked to zero, almost at the same time. After that, only four are kept in the model, three of which stay for high values of lambda. Here we can see the power of Lasso, which is the ability of doing a variable selection while estimating the coefficients. 
+
+
+# PROBLEM 6
+
+The dataset I am using stores the latitude and longitude of AirBnb's located in New York in 2021, along with their prices. Each line corresponds to a different Airbnb.
+It may be useful to use this dataset to predict the cost of the Airbnb according to its location in the city of New York
+
+```{r}
+d <- read.table("C:/Users/cmira/Desktop/ny.csv", 
+                 header = TRUE,
+                 row.names = 1,
+                 sep = ",")
+df <- d[,c(1,2,3)]
+```
+
+```{r message=FALSE, warning=FALSE}
+require(skimr)
+```
+
+```{r}
+myskim2 <- skim_with(base = sfl(),
+                     numeric = sfl(hist = NULL))
+myskim2(df)
+```
+
+As we can see, the latitude goes from 40.5 to 40.9 while the longitude is from -74.2 to -73.7. This values correspond to the area of New York I'm studying.
+The price, which is the response variable, has a positive asymmetrice distribution, as we can see, since 75% of the observations are smaller of very close to the mean value (153 USD), while there is a long tail that goes to 10000USD. Since the lowest price is 0, it is probably due to an error made while filling the dataset.
+
+We can also observe that, since it has a different magnitude, its standard deviation in way higher the that of the other two variables.
+
+For the seek of knowledge, we can also check to which Airbnbs correspond the highest price.
+
+```{r}
+df[which.max(df$price),]
+```
+
+Looking on maps, whe can check that the Airbnb with the highest price has the address "25-64 35th Street, New York".
+
+```{r}
+require(GGally)
+ggpairs(df_complete, title="correlogram with ggpairs()")
+```
+
+Here is the scaled version I will use to obtain better results:
+
+```{r}
+df2 <- as.data.frame(round(cbind(scaling(cbind(df$latitude)), scaling(cbind(df$longitude)), scaling(cbind(df$price))),6))
+dimnames(df2) <- list(rownames(df), colnames(df))
+```
+
+
+```{r}
+mysplitted <- train_test(df2[,c(1,2)],cbind(df2$price))
+
+mytrainingX <- mysplitted[[1]]
+mytrainingY <- mysplitted[[2]]
+mytestX <- mysplitted[[3]]
+mytestY <- mysplitted[[4]]
+
+mymatrix1 <- model_matrix(mytrainingX[,1],mytrainingX[,2],1)
+rownames(mymatrix1) <- translate(rownames(mytrainingX))
+mytestX_1 <- as.data.frame(model_matrix(mytestX$V1,mytestX$V2,1))
+mybeta1 <- betas(mymatrix1, mytrainingY)
+mypred1 <- predictions(mytestX[,1],mytestX[,2],1,mybeta1)
+mymse1 <- mean((mytestY - mypred1)^2)
+myr21 <- 1 - sum((mytestY - mypred1)^2)/sum((mytestY - mean(mytestY))^2)
+
+mymatrix2 <- model_matrix(mytrainingX[,1],mytrainingX[,2],2)
+rownames(mymatrix2) <- translate(rownames(mytrainingX))
+mytestX_2 <- as.data.frame(model_matrix(mytestX$V1,mytestX$V2,2))
+mybeta2 <- betas(mymatrix2, mytrainingY)
+mypred2 <- predictions(mytestX[,1],mytestX[,2],2,mybeta2)
+mymse2 <- mean((mytestY - mypred1)^2)
+myr22 <- 1 - sum((mytestY - mypred2)^2)/sum((mytestY - mean(mytestY))^2)
+
+mymatrix3 <- model_matrix(mytrainingX[,1],mytrainingX[,2],3)
+rownames(mymatrix3) <- translate(rownames(mytrainingX))
+mytestX_3 <- as.data.frame(model_matrix(mytestX$V1,mytestX$V2,3))
+mybeta3 <- betas(mymatrix3, mytrainingY)
+mypred3 <- predictions(mytestX[,1],mytestX[,2],3,mybeta3)
+mymse3 <- mean((mytestY - mypred3)^2)
+myr23 <- 1 - sum((mytestY - mypred3)^2)/sum((mytestY - mean(mytestY))^2)
+
+mymatrix4 <- model_matrix(mytrainingX[,1],mytrainingX[,2],4)
+rownames(mymatrix4) <- translate(rownames(mytrainingX))
+mytestX_4 <- as.data.frame(model_matrix(mytestX$V1,mytestX$V2,4))
+mybeta4 <- betas(mymatrix4, mytrainingY)
+mypred4 <- predictions(mytestX[,1],mytestX[,2],4,mybeta4)
+mymse4 <- mean((mytestY - mypred4)^2)
+myr24 <- 1 - sum((mytestY - mypred4)^2)/sum((mytestY - mean(mytestY))^2)
+
+mymatrix5 <- model_matrix(mytrainingX[,1],mytrainingX[,2],5)
+rownames(mymatrix5) <- translate(rownames(mytrainingX))
+mytestX_5 <- as.data.frame(model_matrix(mytestX$V1,mytestX$V2,5))
+mybeta5 <- betas(mymatrix5, mytrainingY)
+mypred5 <- predictions(mytestX[,1],mytestX[,2],5,mybeta5)
+mymse5 <- mean((mytestY - mypred5)^2)
+myr25 <- 1 - sum((mytestY - mypred5)^2)/sum((mytestY - mean(mytestY))^2)
+```
+
+
+```{r}
+myresults <- matrix(data=NA, nrow=2,ncol=5)
+rownames(myresults)<-cbind("MSE","R2")
+mynames<-c()
+for (i in 1:5){
+  mynames[i] <- paste("order", as.character(i))
+}
+colnames(myresults) <- mynames
+
+myresults[1,] <- rbind(mymse1, mymse2, mymse3, mymse4, mymse5)
+myresults[2,] <- rbind(myr21, myr22, myr23, myr24, myr25)
+
+myresults
+```
+
+From the data I have, the best model would probably be one of the last two. In terms of the values I obtained, it would be the fifth order polynomial, but the differences between it and the previous ore  are minimal, so it may be more clever to use a "simpler" model. In particular, we can say that the last two models are able to predict around 62/63% of the prices of the Aribnb's of the city (could be better).
+We can also see that the test MSE, which measures the errors done in predictiong the test data with the model we used, are close to 1. This is not an optimal value, since the MSE has 0 as lower boundary, but it is not high either, considering that the MSE has no upper limit.
+
+We can now check if the model we used is a good one in terms of over or underfitting, that is, we can check if it sticks too much to the data I trained it on, or if it is able to generalize the results.
+
+```{r}
+mypredtrain1 <- predictions(mytrainingX[,1],mytrainingX[,2],1,mybeta1)
+mymsetrain1 <- mean((mytrainingY - mypredtrain1)^2)
+mypredtrain2 <- predictions(mytrainingX[,1],mytrainingX[,2],2,mybeta2)
+mymsetrain2 <- mean((mytrainingY - mypredtrain2)^2)
+mypredtrain3 <- predictions(mytrainingX[,1],mytrainingX[,2],3,mybeta3)
+mymsetrain3 <- mean((mytrainingY - mypredtrain3)^2)
+mypredtrain4 <- predictions(mytrainingX[,1],mytrainingX[,2],4,mybeta4)
+mymsetrain4 <- mean((mytrainingY - mypredtrain4)^2)
+mypredtrain5 <- predictions(mytrainingX[,1],mytrainingX[,2],5,mybeta5)
+mymsetrain5 <- mean((mytrainingY - mypredtrain5)^2)
+
+mymsematrix <- data.frame(1:5, rbind(mymse1,mymse2,mymse3,mymse4,mymse5),rbind(mymsetrain1,mymsetrain2,mymsetrain3,mymsetrain4,mymsetrain5))
+colnames(mymsematrix) <- c("order", "test", "train")
+rownames(mymsematrix) <- c(1:5)
+```
+
+```{r}
+ggplot()+
+  geom_point(data=mymsematrix, aes(x=order, y=test), size=2)+
+  geom_line(data=mymsematrix, aes(x=order, y=test, colour="test"), size=1)+
+  geom_point(data=mymsematrix, aes(x=order, y=train), size=2)+
+  geom_line(data=mymsematrix, aes(x=order, y=train, colour="training"), size=1)+
+  ylab("Mse")+ggtitle("Training MSEs vs Test MSEs")
+```
+```{r}
+mymsematrix
+```
+
+Even if the plot shows two lines that looks extremely far from one from another, it is useful to look at the values themselves. In fact, the graph might be misleading since the baseline is not set to 0 and, therefore, the two lines look further than they actually are. Looking at the values, we can see that, as "usual", the train MSEs are lower that the test ones, but they are not that far (they differ of 5% circa)
+
+In orther to have better results, I am now implementing the cross validation method:
+
+```{r}
+mynumfolds <- c(5,10)
+mymatrixlist <- list()
+mymsematrix_cv <- as.data.frame(matrix(NA, nrow = 5,3))
+colnames(mymsematrix_cv) <- c("order", "test_cv", "train_cv")
+ 
+
+for (k in 1:length(mynumfolds)){  
+  myfolds<-cut(seq(1,nrow(df2)),breaks=mynumfolds[k],labels=FALSE)
+
+  for (degree in 1:5){
+    
+    mymsestest <- c()
+    mymsestrain <- c()
+    
+    for(i in 1:mynumfolds[k]){ 
+      
+      mytestIndexes_cv <- which(myfolds==i,arr.ind=TRUE)
+      mytestData_cv <- df2[mytestIndexes_cv, ]
+      mytrainData_cv <- df2[-mytestIndexes_cv, ]
+      mydataset_cv<-model_matrix(mytrainData_cv[,1],mytrainData_cv[,2],degree)
+      mybeta_cv <- betas(mydataset_cv, mytrainData_cv[,3])
+      mypredmse_cv <- predictions(mytestData_cv[,1],mytestData_cv[,2],degree,mybeta_cv)
+      mymsetest_cv <- mean((mytestData_cv[,3] - mypredmse_cv)^2)
+      mypredtrain_cv<-predictions(mytrainData_cv[,1],mytrainData_cv[,2],degree,mybeta_cv)
+      mymsetrain_cv <- mean((mytrainData_cv[,3] - mypredtrain_cv)^2)
+      mymsestest[i] <- mymsetest_cv
+      mymsestrain[i] <- mymsetrain_cv
+    }
+    
+    mymsematrix_cv[degree,] <- c(degree, mean(mymsestest), mean(mymsestrain))
+  }
+  
+  mymatrixlist[[k]] <- mymsematrix_cv
+}
+myfivefolds<- mymatrixlist[[1]]
+mytenfolds <- mymatrixlist[[2]]
+
+myp1 <- ggplot()+  geom_point(data=mymsematrix, aes(x=order, y=test), size=2)+  geom_line(data=mymsematrix, aes(x=order, y=test, colour="test"), size=1)+  geom_point(data=mymsematrix, aes(x=order, y=train), size=2)+  geom_line(data=mymsematrix, aes(x=order, y=train, colour="training"), size=1)+  ylab("Mse")+ggtitle("Tr MSE vs Te MSEs 1 sample")
+
+myp2 <- ggplot()+  geom_point(data=myfivefolds, aes(x=order, y=test_cv), size=2)+  geom_line(data=myfivefolds, aes(x=order, y=test_cv, colour="test_cv"), size=1)+  geom_point(data=myfivefolds, aes(x=order, y=train_cv), size=2)+  geom_line(data=myfivefolds, aes(x=order, y=train_cv, colour="train_cv"), size=1)+  ylab("Mse")+ggtitle("Tr MSE vs Te MSE 5-FOLDS CV")
+
+myp3 <- ggplot()+  geom_point(data=mytenfolds, aes(x=order, y=test_cv), size=2)+  geom_line(data=mytenfolds, aes(x=order, y=test_cv, colour="test_cv"), size=1)+  geom_point(data=mytenfolds, aes(x=order, y=train_cv), size=2)+  geom_line(data=mytenfolds, aes(x=order, y=train_cv, colour="train_cv"), size=1)+  ylab("Mse")+ggtitle("Tr MSE vs Te MSE 5-FOLDS CV")
+
+grid.arrange(myp1, myp2, myp3, ncol = 2, nrow = 2)
+
+```
+
+We can now see that, as the number of folds increases, the Test and Train MSEs get similar, and it shows that the model we are using are actually good, and that we "just needed more samples" to really evaluate the mean squared errors. As before, the train MSE is smaller than the test for each polynomial, but they get closer and closer as the number of used folds increases. I did not use the n-fold here since i had too many observation, but the values would be even more accurate in that scenario.
+
+```{r}
+ridgematrix <- matrix(NA,5,3)
+dimnames(ridgematrix) <- list(1:5, c("order", "best lambda", "mse"))
+for (order in 1:5){
+  mymt <- get(paste("mymatrix",toString(order),sep=""))
+  mycv_ridge <- cv.glmnet(mymt, mytrainingY, alpha = 0, nfolds = 10)
+  myridgemse <- min(mycv_ridge$cvm)
+  myoptimal_lambda <- mycv_ridge$lambda.min
+  ridgematrix[order,] <- c(order, myoptimal_lambda, myridgemse)
+}
+ridgematrix 
+```
+
+```{r}
+lassomatrix <- matrix(NA,5,3)
+dimnames(lassomatrix) <- list(1:5, c("order", "best lambda", "mse"))
+for (order in 1:5){
+  mymt <- get(paste("mymatrix",toString(order),sep=""))
+
+  mycv_lasso <- cv.glmnet(mymt, mytrainingY, alpha = 1,  nfolds = 10)
+  mylassomse <- min(mycv_lasso$cvm)
+  mybest_lambda <- mycv_lasso$lambda.min
+  lassomatrix[order,] <- c(order, mybest_lambda, mylassomse)
+  }
+lassomatrix
+```
+
+```{r}
+final <- cbind(mytenfolds$test_cv, ridgematrix[,"mse"], lassomatrix[,"mse"])
+colnames(final) <- c("OLS Mse", "Ridge Mse", "Lasso Mse")
+final
+```
+
+Summing up, we can actually see that as we introduce a penalizing term $\lambda$ into the model, the final MSE we obtain does decrease slightly. This means that if we accept to increase the bias of the model, we are able to reduce its variance. As we can see though, the MSE does not decrease significantly neither with ridge nor with lasso, and therefore it means that we do not explain that more variance than the one explained implementing the OLS.
+In all of the three situations, anyway, we can see that the lowest test MSE is obtained for the fifth order polynomial, and that the fourth order has results that are actually very close to these.
+We can therefore say that the penalizations that occurred in Ridge and Lasso are just minimal ones: the two variables, latitude and longitude, are kept in the five models almost at their "full potential". That is, the variable are quite important in explaining the behaviour of the price of the airbnb, and in predicting as well.
+
+In order to check how muc this model might differ, i am now implementing these methods once again, using linear regressions with a dataset that contains more variables:
+
+```{r}
+df_complete <- read.table("C:/Users/cmira/Desktop/AB_NYC_2019.csv", 
+                 header = TRUE,
+                 row.names = 1,
+                 sep = ",")
+df_complete <- df_complete[complete.cases(df_complete), ]
+head(df_complete) 
+```
+
+```{r}
+df_complete2 <- as.data.frame(round(cbind(scaling(cbind(df_complete$latitude)), scaling(cbind(df_complete$longitude)), scaling(cbind(df_complete$price)), scaling(cbind(df_complete$minimum_nights)), scaling(cbind(df_complete$number_of_reviews)), scaling(cbind(df_complete$reviews_per_month)), scaling(cbind(df_complete$calculated_host_listings_count)), scaling(cbind(df_complete$availability_365))),6))
+dimnames(df_complete2) <- list(rownames(df_complete), colnames(df_complete))
+```
+
+
+```{r}
+splitols <- train_test(df_complete2[,c(1,2,4,5,6,7,8)],cbind(df_complete2$price))
+model <- lm(formula = splitols[[2]] ~ .-1, data = splitols[[1]])
+mseols <- mean((splitols[[4]] - predict(model, newdata = splitols[[3]]))^2)
+```
+
+```{r}
+Amynumfolds <- c(5,10)
+Amylist <- list()
+Amymsematrix_cv <- as.data.frame(matrix(NA, nrow = 5,3))
+colnames(Amymsematrix_cv) <- c("order", "test_cv", "train_cv")
+ 
+
+for (k in 1:length(Amynumfolds)){  
+  Amyfolds<-cut(seq(1,nrow(df_complete2)),breaks=Amynumfolds[k],labels=FALSE)
+    
+    Amymsestest <- c()
+    Amymsestrain <- c()
+    
+    for(i in 1:Amynumfolds[k]){ 
+      
+      AmytestIndexes_cv <- which(Amyfolds==i,arr.ind=TRUE)
+      AmytestData_cv <- df_complete2[AmytestIndexes_cv, ]
+      testY_cv <- cbind(AmytestData_cv[,3])
+      testX_cv <- AmytestData_cv[,-3]
+      AmytrainData_cv <- df_complete2[-AmytestIndexes_cv, ]
+      trainY_cv <- cbind(AmytrainData_cv[,3])
+      trainX_cv <- AmytrainData_cv[,-3]
+      mod <- lm(trainY_cv ~.-1, data = trainX_cv)
+      Apredtrain_ <- predict(mod)
+      Apredtest_ <- predict(mod, newdata = testX_cv)
+      Amymsetest_cv <- mean((testY_cv - Apredtest_)^2)
+      Amymsetrain_cv <- mean((trainY_cv - Apredtrain_)^2)
+      Amymsestest[i] <- Amymsetest_cv
+      Amymsestrain[i] <- Amymsetrain_cv
+    }
+    
+      Amylist[[k]] <- c(mean(Amymsestest), mean(Amymsestrain))
+}
+fivefolds_complete<- Amylist[1]
+tenfolds_complete <- Amylist[2]
+
+fivefolds_complete; tenfolds_complete
+
+```
+
+
+```{r}
+X = model.matrix(price ~ .-1, data = df_complete2)
+ridge_complete <- cv.glmnet(X, df_complete2$price, alpha = 0, nfolds = 10)
+ridgecomp_mse <- min(ridge_complete$cvm)
+ridgecom_optimal_lambda <- ridge_complete$lambda.min
+ridgeresults <- c(ridgecom_optimal_lambda, ridgecomp_mse)
+
+ridgeresults 
+```
+
+```{r}
+X = model.matrix(price ~ .-1, data = df_complete2)
+lasso_complete <- cv.glmnet(X, df_complete2$price, alpha = 1, nfolds = 10)
+lassocomp_mse <- min(lasso_complete$cvm)
+lassocomp_optimal_lambda <- lasso_complete$lambda.min
+lassoresults <- c(lassocomp_optimal_lambda, lassocomp_mse)
+lassoresults 
+```
+
+```{r}
+finalcomparisons <- cbind(tenfolds_complete[[1]][1], ridgeresults[2], lassoresults[2])
+colnames(finalcomparisons) <- c("cv 10folds", "ridge", "lasso");
+finalcomparisons
+```
+
+As we can see, the differences between the three methods here are again not dramatic. As we can show in the plots below, there is no variable that is shrinked to 0 "straight away", which means that they are all useful to explain and predict the price. 
+
+```{r}
+plot(ridge_complete $glmnet.fit, "lambda")
+```
+```{r}
+plot(lasso_complete $glmnet.fit, "lambda")
+```
+
+
+```{r}
+nomi <- c(colnames(df_complete)[-3])
+df_noprice <- df_complete[,-3]
+```
+
+```{r}
+n <- 1
+newdf1 <- cbind.data.frame(df_complete$price, poly(as.matrix(df_noprice), degree = n, raw = TRUE))
+store1 <- colnames(newdf1)
+names(newdf1)[-1]<-paste0("x",c(1:7))
+names(newdf1)[1]<-"prezzo"
+
+newdf21<- round(as.data.frame(scale(newdf1)),3)
+
+split1 <- train_test(newdf21[,c(2,3,4,5,6,7,8)],cbind(newdf21$prezzo))
+trainx1 <- split1[[1]]
+trainy1 <- split1[[2]]
+testx1 <- split1[[3]]
+testy1 <- split1[[4]]
+
+polylm1 <- lm(trainy1 ~ ., trainx1)
+prd1 <- predict(polylm1, newdata = testx1)
+msee1 <- mean((testy1 - prd1)^2)
+msee1
+```
+
+```{r}
+n <- 2
+newdf2 <- cbind.data.frame(df_complete$price, poly(as.matrix(df_noprice), degree = n, raw = TRUE))
+store2 <- colnames(newdf2)
+names(newdf2)[-1]<-paste0("x",c(1:35))
+names(newdf2)[1]<-"prezzo"
+
+newdf22<- as.data.frame(scale(newdf2))
+split2 <- train_test(newdf22[,c(2:35)],cbind(newdf22$prezzo))
+trainx2 <- split2[[1]]
+trainy2 <- split2[[2]]
+testx2 <- split2[[3]]
+testy2 <- split2[[4]]
+
+polylm2 <- lm(trainy2 ~ ., trainx2)
+prd2 <- predict(polylm2, newdata = testx2)
+msee2 <- mean((testy2 - prd2)^2)
+msee2
+```
+```{r}
+n <- 3
+newdf3 <- cbind.data.frame(df_complete$price, poly(as.matrix(df_noprice), degree = n, raw = TRUE))
+store3 <- colnames(newdf3)
+names(newdf3)[-1]<-paste0("x",c(1:119))
+names(newdf3)[1]<-"prezzo"
+
+newdf23<- as.data.frame(scale(newdf3))
+split3 <- train_test(newdf23[,c(2:119)],cbind(newdf23$prezzo))
+trainx3 <- split3[[1]]
+trainy3 <- split3[[2]]
+testx3 <- split3[[3]]
+testy3 <- split3[[4]]
+
+polylm3 <- lm(trainy3 ~ ., trainx3)
+prd3 <- predict(polylm3, newdata = testx3)
+msee3 <- mean((testy3 - prd3)^2)
+msee3
+```
+
+```{r message=FALSE, warning=FALSE}
+n <- 4
+newdf4 <- cbind.data.frame(df_complete$price, poly(as.matrix(df_noprice), degree = n, raw = TRUE))
+store4 <- colnames(newdf4)
+names(newdf4)[-1]<-paste0("x",c(1:329))
+names(newdf4)[1]<-"prezzo"
+
+newdf24<- as.data.frame(scale(newdf4))
+split4 <- train_test(newdf24[,c(2:329)],cbind(newdf24$prezzo))
+trainx4 <- split4[[1]]
+trainy4 <- split4[[2]]
+testx4 <- split4[[3]]
+testy4 <- split4[[4]]
+
+polylm4 <- lm(trainy4 ~ ., trainx4)
+prd4 <- predict(polylm4, newdata = testx4)
+msee4 <- mean((testy4 - prd4)^2)
+msee4
+```
+
+
+```{r message=FALSE, warning=FALSE}
+n <- 5
+newdf5 <- cbind.data.frame(df_complete$price, poly(as.matrix(df_noprice), degree = n, raw = TRUE))
+store5 <- colnames(newdf5)
+names(newdf5)[-1]<-paste0("x",c(1:791))
+names(newdf5)[1]<-"prezzo"
+
+newdf25<- as.data.frame(scale(newdf5))
+split5 <- train_test(newdf25[,c(2:791)],cbind(newdf25$prezzo))
+trainx5 <- split5[[1]]
+trainy5 <- split5[[2]]
+testx5 <- split5[[3]]
+testy5 <- split5[[4]]
+
+polylm5 <- lm(trainy5 ~ ., trainx5)
+prd5 <- predict(polylm5, newdata = testx5)
+msee5 <- mean((testy5 - prd5)^2)
+msee5
+```
+```{r}
+cbind(msee1,msee2,msee3,msee4,msee5)
+```
+
+```{r}
+#step(polylm3, direction = “backward”) THIS IS COMMENTED OUT BECAUSE IT TAKES TOO LONG (25MIN)
+```
+
+```{r}
+finalpoly <- lm(trainy3 ~ x1 + x2 + x3 + x4 + x6 + x8 + x9 + x11 + 
+    x12 + x13 + x14 + x15 + x16 + x18 + x19 + x20 + x22 + x23 + 
+    x24 + x25 + x27 + x28 + x30 + x32 + x34 + x41 + x42 + x44 + 
+    x45 + x46 + x47 + x49 + x50 + x52 + x53 + x54 + x56 + x58 + 
+    x59 + x60 + x61 + x62 + x65 + x66 + x67 + x71 + x72 + x73 + 
+    x74 + x75 + x77 + x78 + x79 + x80 + x82 + x83 + x84 + x85 + 
+    x86 + x87 + x88 + x89 + x90 + x92 + x93 + x96 + x98 + x100 + 
+    x101 + x102 + x104 + x105 + x107 + x108 + x111 + x112 + x114 + 
+    x116 + x117, data = trainx3)
+prdfin <- predict(finalpoly, newdata = testx3)
+mseefin <- mean((testy3 - prdfin)^2)
+mseefin
+```
+
+```{r}
+bestvariables3 <- c(1,  2,  3,  4,  6,  8,  9,  11,  12,  13, 14,15,16,18 ,19,20 ,22 ,23,24 ,25,27,28,30,32,34 ,41,42,44,45,46,47,49,50 ,52,53,54 ,56 ,58 ,59 ,60,61,62 ,65 ,66 ,67 ,71 ,72 ,73 ,74 ,75,77,78 ,79 ,80 ,82 ,83 ,84 ,85 ,86 ,87 ,88 ,89 ,90 ,92 ,93,96,98,100,101 ,102 ,104,105 ,107 ,108,111,112 ,114,116 ,117)
+store3[bestvariables3+1]
+```
+
+
+```{r}
+var <- c("x1", "x2" ,"x3" ,"x4" ,"x6" ,"x8" ,"x9", "x11" ,"x12" ,"x13", "x14", "x15" ,"x16", "x18" ,"x19" ,"x20" ,"x22" ,"x23","x24", "x25" ,"x27", "x28","x30", "x32" ,"x34" ,"x41" ,"x42" ,"x44","x45", "x46" ,"x47", "x49" ,"x50", "x52" ,"x53" ,"x54" ,"x56" ,"x58",     "x59", "x60" ,"x61", "x62" ,"x65", "x66" ,"x67" ,"x71" ,"x72" ,"x73",     "x74", "x75", "x77", "x78" ,"x79", "x80" ,"x82" ,"x83" ,"x84" ,"x85",     "x86", "x87", "x88", "x89" ,"x90", "x92", "x93" ,"x96" ,"x98" ,"x100" ,  "x101" ,"x102" ,"x104" ,"x105", "x107" ,"x108" ,"x111" ,"x112", "x114",    "x116" ,"x117")
+
+finalridge <- cv.glmnet(as.matrix(trainx3[,var]), trainy3, alpha = 0, nfolds = 10)
+final_ridge_opt_lambda <- finalridge$lambda.min
+ridge_pred <- predict(finalridge, s = final_ridge_opt_lambda, newx = as.matrix(testx3[,var]))
+msefinridge <- mean((ridge_pred - testy3)^2)
+```
+
+```{r}
+finallasso <- cv.glmnet(as.matrix(trainx3[,var]), trainy3, alpha = 1, nfolds = 10)
+final_lasso_opt_lambda <- finallasso$lambda.min
+lasso_pred <- predict(finallasso, s = final_lasso_opt_lambda, newx = as.matrix(testx3[,var]))
+msefinlasso <- mean((lasso_pred - testy3)^2)
+```
+
+```{r}
+mseefin; msefinridge; msefinlasso
+```
+
+
